@@ -1,0 +1,3 @@
+Sanchez Gomez Brandon Daniel 5IV12
+resultados: al unir el código fue exitoso y logramos un buen avance en la parte de la programación aunque aun falta mucho para completar el desarrollo
+Conclusion Individual: se logro una app apenas funcional pero con las bases para hacerla, se podría mejorar ewn la cuestión de tiempo y organización, aprendimos mucho sobnre lo que es el trabajo en equipo, como utilizar mas funciones en kotlin, como vincular una base de datos funcional y como usar las APIs dentro de este lenguaje
