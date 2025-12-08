@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // AQUÍ ESTABA EL ERROR: Faltaba el 'version "2.0.0"' al final
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
     id("kotlin-kapt")
 }
@@ -62,4 +61,6 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    implementation("org.jsoup:jsoup:1.17.2")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }
