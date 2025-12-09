@@ -300,61 +300,153 @@ fun PantallaDetalle(navController: NavController, productoId: Int?, viewModel: M
     }
 }
 
-// --- PANTALLA COMPARAR DINÁMICA ---
+// --- PANTALLA COMPARAR INTELIGENTE ---
 @Composable
 fun PantallaComparar(navController: NavController, viewModel: MainViewModel) {
-    // Usamos la lista viva del ViewModel para seleccionar
-    val productosVivos by viewModel.productosVisibles.collectAsState(initial = emptyList())
-
+    // Estado para guardar los productos seleccionados
     var producto1 by remember { mutableStateOf<ProductoUi?>(null) }
     var producto2 by remember { mutableStateOf<ProductoUi?>(null) }
+
+    // Control del diálogo
     var mostrandoSelector by remember { mutableStateOf(false) }
-    var slotSeleccionado by remember { mutableStateOf(0) }
+    var slotSeleccionado by remember { mutableStateOf(0) } // 1 = Izq, 2 = Der
+
+    // LÓGICA INTELIGENTE: Filtramos la lista según qué slot estemos llenando
+    val productosParaMostrar = remember(slotSeleccionado, producto1) {
+        if (slotSeleccionado == 2 && producto1 != null) {
+            // Si estamos eligiendo el SEGUNDO y ya hay PRIMERO:
+            // Filtramos para mostrar SOLO la misma categoría y que no sea el mismo producto
+            catalogoCompleto.filter {
+                it.categoria == producto1!!.categoria && it.id != producto1!!.id
+            }
+        } else {
+            // Si es el primero, o no se ha elegido nada, mostramos TODO
+            catalogoCompleto
+        }
+    }
 
     Scaffold(bottomBar = { BottomNavigationBar(navController, "comparar") }, containerColor = TechBackground) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("COMPARADOR", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(30.dp))
+
+            // FILA DE SELECCIÓN (VS)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.clickable { slotSeleccionado = 1; mostrandoSelector = true }) { SelectorProductoDinamico(producto1) }
+                // SLOT 1 (Izquierda)
+                Box(modifier = Modifier.clickable {
+                    slotSeleccionado = 1
+                    mostrandoSelector = true
+                }) {
+                    SelectorProductoDinamico(producto1)
+                }
+
                 Text("VS", color = NeonGreen, fontSize = 30.sp, fontWeight = FontWeight.Black)
-                Box(modifier = Modifier.clickable { slotSeleccionado = 2; mostrandoSelector = true }) { SelectorProductoDinamico(producto2) }
+
+                // SLOT 2 (Derecha)
+                Box(modifier = Modifier.clickable {
+                    slotSeleccionado = 2
+                    // Truco UX: Si no hay producto 1, obligamos a elegirlo primero o mostramos todo
+                    if (producto1 == null) {
+                        Toast.makeText(navController.context, "Primero elige el Producto 1", Toast.LENGTH_SHORT).show()
+                        slotSeleccionado = 1 // Redirigir al slot 1
+                    }
+                    mostrandoSelector = true
+                }) {
+                    SelectorProductoDinamico(producto2)
+                }
             }
+
+            // Mensaje de ayuda (Feedback visual)
+            if (producto1 != null && producto2 == null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Elige un producto de ${producto1?.categoria?.name} para comparar",
+                    color = NeonGreen,
+                    fontSize = 12.sp
+                )
+            }
+
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Tabla dinámica: solo se muestra si hay dos productos seleccionados
+            // TABLA COMPARATIVA
             if (producto1 != null && producto2 != null) {
                 Card(colors = CardDefaults.cardColors(containerColor = White)) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        RowTabla("Producto", producto1!!.nombre, producto2!!.nombre); Divider()
-                        // Muestra el mejor precio disponible de cada uno
-                        RowTabla("Mejor Precio", "$${producto1!!.obtenerMejorPrecio()}", "$${producto2!!.obtenerMejorPrecio()}"); Divider()
-                        RowTabla("Categoría", producto1!!.categoria.name, producto2!!.categoria.name); Divider()
-                        // Muestra las especificaciones técnicas
+                        RowTabla("Producto", producto1!!.nombre, producto2!!.nombre)
+                        Divider()
+                        // Resalta el precio más barato en verde
+                        val p1 = producto1!!.obtenerMejorPrecio()
+                        val p2 = producto2!!.obtenerMejorPrecio()
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("$${p1}", fontWeight = FontWeight.Bold, color = if(p1 <= p2) Color(0xFF00AA00) else TechBackground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                            Text("Precio", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.weight(0.8f), textAlign = TextAlign.Center)
+                            Text("$${p2}", fontWeight = FontWeight.Bold, color = if(p2 <= p1) Color(0xFF00AA00) else TechBackground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                        }
+
+                        Divider()
+                        RowTabla("Categoría", producto1!!.categoria.name, producto2!!.categoria.name)
+                        Divider()
                         RowTabla("Specs", producto1!!.specs, producto2!!.specs)
                     }
                 }
             } else {
-                Text("Toca los recuadros para elegir productos", color = Color.Gray, textAlign = TextAlign.Center)
+                Text("Selecciona dos productos para ver la tabla", color = Color.Gray)
             }
         }
 
-        // Diálogo de selección usando la lista VIVA (más de 15 productos)
+        // DIÁLOGO DE SELECCIÓN (Usa la lista filtrada)
         if (mostrandoSelector) {
             Dialog(onDismissRequest = { mostrandoSelector = false }) {
-                Card(modifier = Modifier.fillMaxWidth().height(500.dp), colors = CardDefaults.cardColors(containerColor = White)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().height(500.dp),
+                    colors = CardDefaults.cardColors(containerColor = White)
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Elige un producto", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.Black)
+                        Text(
+                            text = if(slotSeleccionado==2) "Sugeridos (${productosParaMostrar.size})" else "Elige un producto",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = Color.Black
+                        )
                         Spacer(modifier = Modifier.height(10.dp))
+
+                        if(productosParaMostrar.isEmpty()) {
+                            Text("No hay otros productos de esta categoría :(", color = Color.Gray)
+                        }
+
                         LazyColumn {
-                            items(productosVivos) { prod ->
-                                Row(modifier = Modifier.fillMaxWidth().padding(8.dp).clickable {
-                                    if (slotSeleccionado == 1) producto1 = prod else producto2 = prod
-                                    mostrandoSelector = false
-                                }, verticalAlignment = Alignment.CenterVertically) {
-                                    if(prod.imagenUrl != null) AsyncImage(model = prod.imagenUrl, contentDescription = null, modifier = Modifier.size(40.dp), contentScale = ContentScale.Fit) else Icon(prod.iconoDefault, null, tint = TechBackground, modifier = Modifier.size(40.dp))
+                            // AQUÍ ES DONDE USAMOS LA LISTA FILTRADA
+                            items(productosParaMostrar) { prod ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp)
+                                        .clickable {
+                                            if (slotSeleccionado == 1) {
+                                                producto1 = prod
+                                                // Si cambiamos el 1, reseteamos el 2 para evitar inconsistencias
+                                                producto2 = null
+                                            } else {
+                                                producto2 = prod
+                                            }
+                                            mostrandoSelector = false
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if(prod.imagenUrl != null) {
+                                        AsyncImage(model = prod.imagenUrl, contentDescription = null, modifier = Modifier.size(40.dp), contentScale = ContentScale.Fit)
+                                    } else {
+                                        Icon(prod.iconoDefault, null, tint = TechBackground, modifier = Modifier.size(40.dp))
+                                    }
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Text(prod.nombre, color = Color.Black, maxLines = 1)
+                                    Column {
+                                        Text(prod.nombre, color = Color.Black, fontWeight = FontWeight.Bold)
+                                        Text(prod.categoria.name, color = Color.Gray, fontSize = 10.sp)
+                                    }
                                 }
                                 Divider(color = Color.LightGray)
                             }
