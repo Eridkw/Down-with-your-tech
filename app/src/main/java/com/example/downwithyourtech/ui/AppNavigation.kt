@@ -57,10 +57,8 @@ import com.example.downwithyourtech.R
 import com.example.downwithyourtech.data.DatabaseHelper
 import com.example.downwithyourtech.data.WebScraper
 
-// ==========================================
-// 1. CONSTANTES Y MODELOS
-// ==========================================
 val TechBackground = Color(0xFF000040)
+val BottomNavBackground = Color(0xFF000025)
 val NeonGreen = Color(0xFF4CFF00)
 val White = Color.White
 val GrayPlaceholder = Color(0xFFF5F5F5)
@@ -83,12 +81,12 @@ data class ProductoUi(
     val opciones: List<OpcionTienda>,
     val imagenUrl: String? = null,
     val iconoDefault: ImageVector = Icons.Default.Devices,
-    val esFavorito: Boolean = false // <--- NUEVO CAMPO PARA CONTROLAR FAVORITOS
+    val esFavorito: Boolean = false
 ) {
     fun obtenerMejorPrecio(): Double = opciones.minOfOrNull { it.precio } ?: 0.0
 }
 
-// --- CATÁLOGO EXPANDIDO (15 PRODUCTOS CON FOTOS DE UNSPLASH) ---
+
 val catalogoCompleto = listOf(
     // --- GAMING ---
     ProductoUi(1, "RTX 4060 8GB", CategoriaType.GAMING, "8GB GDDR6, DLSS 3.0", listOf(OpcionTienda("Amazon", 6500.0, 4.8, "https://www.amazon.com.mx/s?k=rtx+4060"), OpcionTienda("MercadoLibre", 6300.0, 4.7, "https://listado.mercadolibre.com.mx/rtx-4060")), imagenUrl = "https://images.unsplash.com/photo-1591488320449-011701bb6704?q=80&w=1000&auto=format&fit=crop", iconoDefault = Icons.Default.Computer),
@@ -96,7 +94,6 @@ val catalogoCompleto = listOf(
     ProductoUi(6, "Teclado Mecánico RGB", CategoriaType.GAMING, "Switches Rojos, 60%", listOf(OpcionTienda("Amazon", 800.0, 4.4, "https://www.amazon.com.mx/"), OpcionTienda("MercadoLibre", 750.0, 4.3, "https://listado.mercadolibre.com.mx/")), imagenUrl = "https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?q=80&w=1000&auto=format&fit=crop", iconoDefault = Icons.Default.Keyboard),
     ProductoUi(7, "Monitor Gamer 165Hz", CategoriaType.GAMING, "24 pulgadas, 1ms IPS", listOf(OpcionTienda("Amazon", 3500.0, 4.6, "https://www.amazon.com.mx/"), OpcionTienda("Walmart", 3200.0, 4.5, "https://www.walmart.com.mx/")), imagenUrl = "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1000&auto=format&fit=crop", iconoDefault = Icons.Default.DesktopWindows),
     ProductoUi(15, "Steam Deck OLED", CategoriaType.GAMING, "1TB, Pantalla OLED HDR", listOf(OpcionTienda("Amazon (Importado)", 14000.0, 4.9, "https://www.amazon.com.mx/"), OpcionTienda("MercadoLibre", 13500.0, 4.8, "https://listado.mercadolibre.com.mx/")), imagenUrl = "https://images.unsplash.com/photo-1698668687273-61d373594124?q=80&w=1000&auto=format&fit=crop", iconoDefault = Icons.Default.Gamepad),
-
 
     // --- AUDIO ---
     ProductoUi(2, "Galaxy Buds 3 Pro", CategoriaType.AUDIO, "ANC Adaptativo, 24bit", listOf(OpcionTienda("Samsung", 3200.0, 4.9, "https://www.samsung.com/mx/"), OpcionTienda("Amazon", 2900.0, 4.7, "https://www.amazon.com.mx/s?k=galaxy+buds+3+pro")), imagenUrl = "https://images.unsplash.com/photo-1610427303867-b703e72dc07e?q=80&w=1000&auto=format&fit=crop", iconoDefault = Icons.Default.Headphones),
@@ -115,21 +112,17 @@ val catalogoCompleto = listOf(
     ProductoUi(14, "Hisense U8K Mini-LED", CategoriaType.TV, "Mejor calidad-precio 4K 144Hz", listOf(OpcionTienda("Amazon", 14000.0, 4.5, "https://www.amazon.com.mx/"), OpcionTienda("Walmart", 13500.0, 4.4, "https://www.walmart.com.mx/")), imagenUrl = "https://images.unsplash.com/photo-1552975084-6e027cd345c2?q=80&w=1000&auto=format&fit=crop", iconoDefault = Icons.Default.Tv)
 )
 
-// ==========================================
-// 2. VIEWMODEL (CON LÓGICA DE FAVORITOS)
-// ==========================================
 class MainViewModel : ViewModel() {
     private val _usuarioLogueado = MutableStateFlow<String?>(null)
     val usuarioLogueado = _usuarioLogueado.asStateFlow()
+
     private val _textoBusqueda = MutableStateFlow("")
     val textoBusqueda = _textoBusqueda.asStateFlow()
     private val _categoriaSeleccionada = MutableStateFlow(CategoriaType.TODOS)
     val categoriaSeleccionada = _categoriaSeleccionada.asStateFlow()
 
-    // Usamos una lista mutable "viva" para poder actualizar favoritos y scraping
     private val _catalogoVivo = MutableStateFlow(catalogoCompleto)
 
-    // Esta lista combina búsqueda, categoría y cambios en el catálogo (favoritos/precios)
     val productosVisibles = combine(_textoBusqueda, _categoriaSeleccionada, _catalogoVivo) { texto, categoria, catalogo ->
         catalogo.filter { producto ->
             val pasaCategoria = categoria == CategoriaType.TODOS || producto.categoria == categoria
@@ -147,45 +140,31 @@ class MainViewModel : ViewModel() {
         if (_categoriaSeleccionada.value == nuevaCategoria) _categoriaSeleccionada.value = CategoriaType.TODOS
         else _categoriaSeleccionada.value = nuevaCategoria
     }
-
-    // --- NUEVA FUNCIÓN: ALTERNAR FAVORITO ---
     fun toggleFavorito(productoId: Int) {
-        val listaActual = _catalogoVivo.value.toMutableList()
-        // Buscamos el índice del producto en la lista viva
-        val indice = listaActual.indexOfFirst { it.id == productoId }
-
-        if (indice != -1) {
-            val productoViejo = listaActual[indice]
-            // Creamos una copia invirtiendo el valor de 'esFavorito'
-            listaActual[indice] = productoViejo.copy(esFavorito = !productoViejo.esFavorito)
-            // Actualizamos la lista, lo que repintará la UI automáticamente
-            _catalogoVivo.value = listaActual
+        val lista = _catalogoVivo.value.toMutableList()
+        val idx = lista.indexOfFirst { it.id == productoId }
+        if (idx != -1) {
+            lista[idx] = lista[idx].copy(esFavorito = !lista[idx].esFavorito)
+            _catalogoVivo.value = lista
         }
     }
 
-    fun actualizarPreciosReales(nombreProducto: String) {
+    fun actualizarPreciosReales(nombre: String) {
         viewModelScope.launch {
-            val resultado = scraper.buscarEnMercadoLibre(nombreProducto)
-            if (resultado != null) {
-                val listaActual = _catalogoVivo.value.toMutableList()
-                val indice = listaActual.indexOfFirst { it.nombre.contains(nombreProducto, ignoreCase = true) }
-                if (indice != -1) {
-                    val productoViejo = listaActual[indice]
-                    // Evitamos duplicar la opción "En Vivo" si ya existe
-                    if (productoViejo.opciones.none { it.nombreTienda == "Mercado Libre (En Vivo)" }) {
-                        val nuevaOpcion = OpcionTienda("Mercado Libre (En Vivo)", resultado.precio, 4.5, resultado.link)
-                        listaActual[indice] = productoViejo.copy(opciones = productoViejo.opciones + nuevaOpcion)
-                        _catalogoVivo.value = listaActual
-                    }
+            val res = scraper.buscarEnMercadoLibre(nombre)
+            if (res != null) {
+                val lista = _catalogoVivo.value.toMutableList()
+                val idx = lista.indexOfFirst { it.nombre.contains(nombre, true) }
+                if (idx != -1 && lista[idx].opciones.none { it.nombreTienda.contains("En Vivo") }) {
+                    val nueva = OpcionTienda("Mercado Libre (En Vivo)", res.precio, 4.5, res.link)
+                    lista[idx] = lista[idx].copy(opciones = lista[idx].opciones + nueva)
+                    _catalogoVivo.value = lista
                 }
             }
         }
     }
 }
 
-// ==========================================
-// 3. NAVEGACIÓN
-// ==========================================
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -197,8 +176,8 @@ fun AppNavigation() {
         composable("home") { PantallaPrincipal(navController, viewModel) }
         composable("login") { PantallaLogin(navController, viewModel, dbHelper) }
         composable("registro") { PantallaRegistro(navController, viewModel, dbHelper) }
-        composable("favoritos") { PantallaFavoritos(navController, viewModel) } // <--- Pasamos ViewModel
-        composable("comparar") { PantallaComparar(navController, viewModel) } // <--- Pasamos ViewModel para datos vivos
+        composable("favoritos") { PantallaFavoritos(navController, viewModel) }
+        composable("comparar") { PantallaComparar(navController, viewModel) }
         composable("detalle/{productoId}") { backStackEntry ->
             val id = backStackEntry.arguments?.getString("productoId")?.toIntOrNull()
             PantallaDetalle(navController, id, viewModel)
@@ -206,14 +185,10 @@ fun AppNavigation() {
     }
 }
 
-// ==========================================
-// 4. PANTALLAS PRINCIPALES
-// ==========================================
 
 @Composable
 fun PantallaPrincipal(navController: NavController, viewModel: MainViewModel) {
     val usuario by viewModel.usuarioLogueado.collectAsState()
-    // Escuchamos la lista filtrada y viva del ViewModel
     val productos by viewModel.productosVisibles.collectAsState(initial = emptyList())
     val textoBusqueda by viewModel.textoBusqueda.collectAsState()
     val catSeleccionada by viewModel.categoriaSeleccionada.collectAsState()
@@ -237,12 +212,7 @@ fun PantallaPrincipal(navController: NavController, viewModel: MainViewModel) {
                 item(span = { GridItemSpan(2) }) { Text("No hay resultados :(", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(20.dp)) }
             } else {
                 items(productos) { producto ->
-                    // Pasamos la función para dar like al hacer clic en el corazón
-                    CardProductoVisual(
-                        producto = producto,
-                        onClick = { navController.navigate("detalle/${producto.id}") },
-                        onFavoritoClick = { viewModel.toggleFavorito(producto.id) }
-                    )
+                    CardProductoVisual(producto = producto, onClick = { navController.navigate("detalle/${producto.id}") }, onFavoritoClick = { viewModel.toggleFavorito(producto.id) })
                 }
             }
         }
@@ -252,301 +222,94 @@ fun PantallaPrincipal(navController: NavController, viewModel: MainViewModel) {
 @Composable
 fun PantallaDetalle(navController: NavController, productoId: Int?, viewModel: MainViewModel) {
     val productosVivos by viewModel.productosVisibles.collectAsState(initial = emptyList())
-    // Buscamos siempre en la lista viva para ver el estado actualizado de favorito y precio
     val producto = productosVivos.find { it.id == productoId } ?: catalogoCompleto.find { it.id == productoId } ?: catalogoCompleto[0]
-
-    LaunchedEffect(producto.id) {
-        val yaTieneEnVivo = producto.opciones.any { it.nombreTienda.contains("En Vivo") }
-        if (!yaTieneEnVivo) viewModel.actualizarPreciosReales(producto.nombre)
-    }
+    LaunchedEffect(producto.id) { val yaTieneEnVivo = producto.opciones.any { it.nombreTienda.contains("En Vivo") }; if (!yaTieneEnVivo) viewModel.actualizarPreciosReales(producto.nombre) }
     val mejorPrecio = producto.obtenerMejorPrecio()
-
     Column(modifier = Modifier.fillMaxSize().background(TechBackground).verticalScroll(rememberScrollState())) {
         Box(modifier = Modifier.fillMaxWidth().height(300.dp).background(White).padding(20.dp), contentAlignment = Alignment.Center) {
             ImagenProductoGrande(producto)
-            // Botón Atrás
             IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.align(Alignment.TopStart).background(Color.Black.copy(alpha = 0.1f), CircleShape)) { Icon(Icons.Default.ArrowBack, null, tint = Color.Black) }
-
-            // --- NUEVO: Botón Favorito Gigante en Detalle ---
-            IconButton(
-                onClick = { viewModel.toggleFavorito(producto.id) },
-                modifier = Modifier.align(Alignment.TopEnd).background(Color.Black.copy(alpha = 0.1f), CircleShape)
-            ) {
-                Icon(
-                    // Usamos iconos diferentes si está lleno o vacío
-                    imageVector = if (producto.esFavorito) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = "Favorito",
-                    tint = if (producto.esFavorito) NeonGreen else Color.Gray,
-                    modifier = Modifier.size(28.dp)
-                )
+            IconButton(onClick = { viewModel.toggleFavorito(producto.id) }, modifier = Modifier.align(Alignment.TopEnd).background(Color.Black.copy(alpha = 0.1f), CircleShape)) {
+                Icon(imageVector = if (producto.esFavorito) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder, contentDescription = null, tint = if (producto.esFavorito) NeonGreen else Color.Gray)
             }
         }
         Column(modifier = Modifier.padding(20.dp)) {
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text(producto.nombre, color = White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Box(modifier = Modifier.background(NeonGreen, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    val promedio = if (producto.opciones.isNotEmpty()) producto.opciones.map { it.rating }.average() else 0.0
-                    Text(String.format("%.1f", promedio), fontWeight = FontWeight.Bold, color = Color.Black)
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(producto.specs, color = Color.Gray, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(24.dp))
-            Text("TIENDAS WEB (Toca para ir)", color = NeonGreen, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-            val opcionesOrdenadas = producto.opciones.sortedBy { it.precio }
-            if (opcionesOrdenadas.isEmpty()) Text("Buscando precios...", color = Color.Gray) else opcionesOrdenadas.forEach { opcion -> FilaTiendaClickeable(opcion, opcion.precio > 0 && opcion.precio == mejorPrecio) }
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) { Text(producto.nombre, color = White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Box(modifier = Modifier.background(NeonGreen, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) { Text("${producto.opciones.firstOrNull()?.rating ?: 4.5}", fontWeight = FontWeight.Bold, color = Color.Black) } }
+            Spacer(modifier = Modifier.height(8.dp)); Text(producto.specs, color = Color.Gray, fontSize = 14.sp); Spacer(modifier = Modifier.height(24.dp)); Text("DÓNDE COMPRAR", color = NeonGreen, fontWeight = FontWeight.Bold, fontSize = 18.sp); Spacer(modifier = Modifier.height(12.dp))
+            val opciones = producto.opciones.sortedBy { it.precio }; opciones.forEach { FilaTiendaClickeable(it, it.precio == mejorPrecio) }
         }
     }
 }
 
-// --- PANTALLA COMPARAR INTELIGENTE ---
 @Composable
 fun PantallaComparar(navController: NavController, viewModel: MainViewModel) {
-    // Estado para guardar los productos seleccionados
-    var producto1 by remember { mutableStateOf<ProductoUi?>(null) }
-    var producto2 by remember { mutableStateOf<ProductoUi?>(null) }
-
-    // Control del diálogo
-    var mostrandoSelector by remember { mutableStateOf(false) }
-    var slotSeleccionado by remember { mutableStateOf(0) } // 1 = Izq, 2 = Der
-
-    // LÓGICA INTELIGENTE: Filtramos la lista según qué slot estemos llenando
-    val productosParaMostrar = remember(slotSeleccionado, producto1) {
-        if (slotSeleccionado == 2 && producto1 != null) {
-            // Si estamos eligiendo el SEGUNDO y ya hay PRIMERO:
-            // Filtramos para mostrar SOLO la misma categoría y que no sea el mismo producto
-            catalogoCompleto.filter {
-                it.categoria == producto1!!.categoria && it.id != producto1!!.id
-            }
-        } else {
-            // Si es el primero, o no se ha elegido nada, mostramos TODO
-            catalogoCompleto
-        }
-    }
-
+    var p1 by remember { mutableStateOf<ProductoUi?>(null) }; var p2 by remember { mutableStateOf<ProductoUi?>(null) }; var showSel by remember { mutableStateOf(false) }; var slot by remember { mutableStateOf(0) }
+    val list = remember(slot, p1) { if (slot == 2 && p1 != null) catalogoCompleto.filter { it.categoria == p1!!.categoria && it.id != p1!!.id } else catalogoCompleto }
     Scaffold(bottomBar = { BottomNavigationBar(navController, "comparar") }, containerColor = TechBackground) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("COMPARADOR", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(30.dp))
-
-            // FILA DE SELECCIÓN (VS)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                // SLOT 1 (Izquierda)
-                Box(modifier = Modifier.clickable {
-                    slotSeleccionado = 1
-                    mostrandoSelector = true
-                }) {
-                    SelectorProductoDinamico(producto1)
-                }
-
-                Text("VS", color = NeonGreen, fontSize = 30.sp, fontWeight = FontWeight.Black)
-
-                // SLOT 2 (Derecha)
-                Box(modifier = Modifier.clickable {
-                    slotSeleccionado = 2
-                    // Truco UX: Si no hay producto 1, obligamos a elegirlo primero o mostramos todo
-                    if (producto1 == null) {
-                        Toast.makeText(navController.context, "Primero elige el Producto 1", Toast.LENGTH_SHORT).show()
-                        slotSeleccionado = 1 // Redirigir al slot 1
-                    }
-                    mostrandoSelector = true
-                }) {
-                    SelectorProductoDinamico(producto2)
-                }
-            }
-
-            // Mensaje de ayuda (Feedback visual)
-            if (producto1 != null && producto2 == null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Elige un producto de ${producto1?.categoria?.name} para comparar",
-                    color = NeonGreen,
-                    fontSize = 12.sp
-                )
-            }
-
+            Text("COMPARADOR", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(modifier = Modifier.height(30.dp)); Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) { Box(modifier = Modifier.clickable { slot = 1; showSel = true }) { SelectorProductoDinamico(p1) }; Text("VS", color = NeonGreen, fontSize = 30.sp, fontWeight = FontWeight.Black); Box(modifier = Modifier.clickable { slot = 2; if (p1 == null) { Toast.makeText(navController.context, "Elige el primero", Toast.LENGTH_SHORT).show(); slot = 1 }else showSel = true }) { SelectorProductoDinamico(p2) } }
             Spacer(modifier = Modifier.height(40.dp))
-
-            // TABLA COMPARATIVA
-            if (producto1 != null && producto2 != null) {
-                Card(colors = CardDefaults.cardColors(containerColor = White)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        RowTabla("Producto", producto1!!.nombre, producto2!!.nombre)
-                        Divider()
-                        // Resalta el precio más barato en verde
-                        val p1 = producto1!!.obtenerMejorPrecio()
-                        val p2 = producto2!!.obtenerMejorPrecio()
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("$${p1}", fontWeight = FontWeight.Bold, color = if(p1 <= p2) Color(0xFF00AA00) else TechBackground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                            Text("Precio", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.weight(0.8f), textAlign = TextAlign.Center)
-                            Text("$${p2}", fontWeight = FontWeight.Bold, color = if(p2 <= p1) Color(0xFF00AA00) else TechBackground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                        }
-
-                        Divider()
-                        RowTabla("Categoría", producto1!!.categoria.name, producto2!!.categoria.name)
-                        Divider()
-                        RowTabla("Specs", producto1!!.specs, producto2!!.specs)
-                    }
-                }
-            } else {
-                Text("Selecciona dos productos para ver la tabla", color = Color.Gray)
-            }
+            if (p1 != null && p2 != null) { Card(colors = CardDefaults.cardColors(containerColor = White)) { Column(modifier = Modifier.padding(16.dp)) { RowTabla("Precio", "$${p1!!.obtenerMejorPrecio()}", "$${p2!!.obtenerMejorPrecio()}"); Divider(); RowTabla("Specs", p1!!.specs, p2!!.specs) } } }
         }
-
-        // DIÁLOGO DE SELECCIÓN (Usa la lista filtrada)
-        if (mostrandoSelector) {
-            Dialog(onDismissRequest = { mostrandoSelector = false }) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().height(500.dp),
-                    colors = CardDefaults.cardColors(containerColor = White)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = if(slotSeleccionado==2) "Sugeridos (${productosParaMostrar.size})" else "Elige un producto",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = Color.Black
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        if(productosParaMostrar.isEmpty()) {
-                            Text("No hay otros productos de esta categoría :(", color = Color.Gray)
-                        }
-
-                        LazyColumn {
-                            // AQUÍ ES DONDE USAMOS LA LISTA FILTRADA
-                            items(productosParaMostrar) { prod ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp)
-                                        .clickable {
-                                            if (slotSeleccionado == 1) {
-                                                producto1 = prod
-                                                // Si cambiamos el 1, reseteamos el 2 para evitar inconsistencias
-                                                producto2 = null
-                                            } else {
-                                                producto2 = prod
-                                            }
-                                            mostrandoSelector = false
-                                        },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if(prod.imagenUrl != null) {
-                                        AsyncImage(model = prod.imagenUrl, contentDescription = null, modifier = Modifier.size(40.dp), contentScale = ContentScale.Fit)
-                                    } else {
-                                        Icon(prod.iconoDefault, null, tint = TechBackground, modifier = Modifier.size(40.dp))
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(prod.nombre, color = Color.Black, fontWeight = FontWeight.Bold)
-                                        Text(prod.categoria.name, color = Color.Gray, fontSize = 10.sp)
-                                    }
-                                }
-                                Divider(color = Color.LightGray)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        if (showSel) { Dialog(onDismissRequest = { showSel = false }) { Card(modifier = Modifier.fillMaxWidth().height(500.dp), colors = CardDefaults.cardColors(containerColor = White)) { LazyColumn { items(list) { prod -> Row(modifier = Modifier.fillMaxWidth().clickable { if (slot == 1) { p1 = prod; p2 = null } else p2 = prod; showSel = false }.padding(16.dp)) { Text(prod.nombre, color = Color.Black) } } } } } }
     }
 }
 
-// --- PANTALLA FAVORITOS FUNCIONAL ---
 @Composable
 fun PantallaFavoritos(navController: NavController, viewModel: MainViewModel) {
-    // Escuchamos la lista VIVA del ViewModel
     val productosVivos by viewModel.productosVisibles.collectAsState(initial = emptyList())
-    // Filtramos SOLO los que tienen esFavorito = true
     val favoritos = productosVivos.filter { it.esFavorito }
-
     Scaffold(bottomBar = { BottomNavigationBar(navController, "favoritos") }, containerColor = TechBackground) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            Text("TUS FAVORITOS", color = White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp))
-
-            if (favoritos.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Aún no tienes favoritos :(", color = Color.Gray)
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(favoritos) { producto ->
-                        // Reutilizamos la misma tarjeta, pasando la acción de toggle
-                        CardProductoVisual(
-                            producto = producto,
-                            onClick = { navController.navigate("detalle/${producto.id}") },
-                            onFavoritoClick = { viewModel.toggleFavorito(producto.id) }
-                        )
-                    }
-                }
+            Text("FAVORITOS", color = White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp))
+            LazyVerticalGrid(columns = GridCells.Fixed(2), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(favoritos) { prod -> CardProductoVisual(prod, { navController.navigate("detalle/${prod.id}") }, { viewModel.toggleFavorito(prod.id) }) }
             }
         }
     }
 }
 
-// ==========================================
-// 5. COMPONENTES VISUALES Y HELPERS
-// ==========================================
+@Composable
+fun PantallaLogin(navController: NavController, viewModel: MainViewModel, dbHelper: DatabaseHelper) {
+    var usuarioText by remember { mutableStateOf("") }; var passText by remember { mutableStateOf("") }; val context = LocalContext.current
+    Column(modifier = Modifier.fillMaxSize().background(TechBackground).padding(30.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(modifier = Modifier.height(20.dp)); Image(painter = painterResource(id = R.drawable.logosinfondo), contentDescription = "Logo", modifier = Modifier.size(200.dp))
+        Spacer(modifier = Modifier.height(30.dp)); CampoTextoBlanco(usuarioText, { usuarioText = it }, "USUARIO/CORREO"); Spacer(modifier = Modifier.height(15.dp)); CampoTextoBlanco(passText, { passText = it }, "CONTRASEÑA", isPassword = true); Spacer(modifier = Modifier.height(30.dp))
+        Button(onClick = { try { val nombreReal = dbHelper.validarLogin(usuarioText, passText); if(nombreReal != null) { viewModel.login(nombreReal); navController.popBackStack() } else { Toast.makeText(context, "Credenciales incorrectas", Toast.LENGTH_SHORT).show() } } catch (e: Exception) { Toast.makeText(context, "Error DB", Toast.LENGTH_LONG).show() } }, colors = ButtonDefaults.buttonColors(containerColor = NeonGreen), modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("INICIAR SESIÓN", color = Color.Black, fontWeight = FontWeight.Bold) }
+        SectionRedesSociales(viewModel, navController)
+        Spacer(modifier = Modifier.height(20.dp)); Row { Text("¿No tienes cuenta? ", color = Color.Gray); Text("Regístrate", color = NeonGreen, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { navController.navigate("registro") }) }
+    }
+}
+
+@Composable
+fun PantallaRegistro(navController: NavController, viewModel: MainViewModel, dbHelper: DatabaseHelper) {
+    var usuario by remember { mutableStateOf("") }; var correo by remember { mutableStateOf("") }; var pass by remember { mutableStateOf("") }; var passConfirm by remember { mutableStateOf("") }; val context = LocalContext.current
+    Column(modifier = Modifier.fillMaxSize().background(TechBackground).padding(30.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(modifier = Modifier.height(20.dp)); Text("REGÍSTRATE", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(modifier = Modifier.height(20.dp)); Image(painter = painterResource(id = R.drawable.logosinfondo), contentDescription = "Logo", modifier = Modifier.size(200.dp))
+        Spacer(modifier = Modifier.height(30.dp)); CampoTextoBlanco(usuario, { usuario = it }, "USUARIO"); Spacer(modifier = Modifier.height(15.dp)); CampoTextoBlanco(correo, { correo = it }, "CORREO", keyboardType = KeyboardType.Email); Spacer(modifier = Modifier.height(15.dp)); CampoTextoBlanco(pass, { pass = it }, "CONTRASEÑA", isPassword = true); Spacer(modifier = Modifier.height(15.dp)); CampoTextoBlanco(passConfirm, { passConfirm = it }, "CONFIRMAR CONTRASEÑA", isPassword = true); Spacer(modifier = Modifier.height(30.dp))
+        Button(onClick = { if (usuario.isEmpty() || correo.isEmpty() || pass.isEmpty()) { Toast.makeText(context, "Llena todo", Toast.LENGTH_SHORT).show() } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(correo).matches()) { Toast.makeText(context, "Correo inválido", Toast.LENGTH_SHORT).show() } else if (!esPasswordSegura(pass)) { Toast.makeText(context, "Contraseña insegura", Toast.LENGTH_LONG).show() } else if (pass != passConfirm) { Toast.makeText(context, "No coinciden", Toast.LENGTH_SHORT).show() } else { if (dbHelper.existeUsuarioOCorreo(usuario, correo)) { Toast.makeText(context, "Ya existe", Toast.LENGTH_LONG).show() } else { if (dbHelper.registrarUsuario(usuario, correo, pass)) { viewModel.login(usuario); navController.navigate("home") { popUpTo("home") { inclusive = true } }; Toast.makeText(context, "Registro Exitoso", Toast.LENGTH_SHORT).show() } } } }, colors = ButtonDefaults.buttonColors(containerColor = NeonGreen), modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("CREAR CUENTA", color = Color.Black, fontWeight = FontWeight.Bold) }
+        SectionRedesSociales(viewModel, navController)
+    }
+}
+
 
 fun esPasswordSegura(password: String): Boolean = password.any { it.isUpperCase() } && password.any { it.isDigit() } && password.length >= 8
 
 @Composable
 fun ImagenProductoGrande(producto: ProductoUi) {
-    if (producto.imagenUrl != null) {
-        AsyncImage(model = producto.imagenUrl, contentDescription = null, modifier = Modifier.size(250.dp), contentScale = ContentScale.Fit, error = painterResource(R.drawable.logosinfondo))
-    } else {
-        Icon(producto.iconoDefault, null, tint = Color.Black, modifier = Modifier.size(150.dp))
-    }
+    if (producto.imagenUrl != null) { AsyncImage(model = producto.imagenUrl, contentDescription = null, modifier = Modifier.size(250.dp), contentScale = ContentScale.Fit, error = painterResource(R.drawable.logosinfondo)) } else { Icon(producto.iconoDefault, null, tint = Color.Black, modifier = Modifier.size(150.dp)) }
 }
 
-// --- TARJETA DE PRODUCTO CON BOTÓN DE CORAZÓN ---
 @Composable
 fun CardProductoVisual(producto: ProductoUi, onClick: () -> Unit, onFavoritoClick: () -> Unit) {
     val mejorPrecio = producto.obtenerMejorPrecio()
     Card(colors = CardDefaults.cardColors(containerColor = White), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(200.dp).clickable { onClick() }) {
         Column {
-            // Usamos un Box para poder poner el icono del corazón encima de la imagen
-            Box(modifier = Modifier.weight(1f).fillMaxWidth().background(GrayPlaceholder)) {
-                // Imagen centrada
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    if (producto.imagenUrl != null) {
-                        AsyncImage(model = producto.imagenUrl, contentDescription = null, modifier = Modifier.padding(10.dp).fillMaxSize(), contentScale = ContentScale.Fit, error = painterResource(R.drawable.logosinfondo))
-                    } else {
-                        Icon(producto.iconoDefault, null, tint = Color.Gray, modifier = Modifier.size(50.dp))
-                    }
-                }
-
-                // Botón de Corazón en la esquina superior derecha
-                IconButton(
-                    onClick = onFavoritoClick,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).background(Color.White.copy(alpha = 0.7f), CircleShape).size(32.dp)
-                ) {
-                    Icon(
-                        // Cambia el icono entre relleno (Favorite) y borde (FavoriteBorder)
-                        imageVector = if (producto.esFavorito) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = "Favorito",
-                        // Cambia el color entre Verde Neón y Gris
-                        tint = if (producto.esFavorito) NeonGreen else Color.Gray,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+            Box(modifier = Modifier.weight(1f).fillMaxWidth().background(GrayPlaceholder), contentAlignment = Alignment.Center) {
+                if (producto.imagenUrl != null) { AsyncImage(model = producto.imagenUrl, contentDescription = null, modifier = Modifier.padding(10.dp).fillMaxSize(), contentScale = ContentScale.Fit, error = painterResource(R.drawable.logosinfondo)) } else { Icon(producto.iconoDefault, null, tint = Color.Gray, modifier = Modifier.size(50.dp)) }
+                IconButton(onClick = onFavoritoClick, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) { Icon(if (producto.esFavorito) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder, null, tint = if (producto.esFavorito) NeonGreen else Color.Gray) }
             }
-            Column(modifier = Modifier.padding(10.dp)) {
-                Text(producto.nombre, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.Black, maxLines = 1)
-                Text("${producto.opciones.size} Tiendas", fontSize = 11.sp, color = Color.Gray)
-                Text("Desde $$mejorPrecio", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = TechBackground)
-            }
+            Column(modifier = Modifier.padding(10.dp)) { Text(producto.nombre, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.Black, maxLines = 1); Text("Desde $${String.format("%,.0f", mejorPrecio)}", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = TechBackground) }
         }
     }
 }
@@ -554,12 +317,10 @@ fun CardProductoVisual(producto: ProductoUi, onClick: () -> Unit, onFavoritoClic
 @Composable
 fun FilaTiendaClickeable(opcion: OpcionTienda, esMejorOpcion: Boolean) {
     val context = LocalContext.current
-    Card(colors = CardDefaults.cardColors(containerColor = White), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).border(if (esMejorOpcion) 3.dp else 0.dp, if (esMejorOpcion) NeonGreen else Color.Transparent, RoundedCornerShape(12.dp)).clickable {
-        try { val intent = Intent(Intent.ACTION_VIEW, Uri.parse(opcion.urlEnlace)); context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "No se pudo abrir", Toast.LENGTH_SHORT).show() }
-    }, shape = RoundedCornerShape(12.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = White), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).border(if (esMejorOpcion) 3.dp else 0.dp, if (esMejorOpcion) NeonGreen else Color.Transparent, RoundedCornerShape(12.dp)).clickable { try { val intent = Intent(Intent.ACTION_VIEW, Uri.parse(opcion.urlEnlace)); context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "No se pudo abrir", Toast.LENGTH_SHORT).show() } }, shape = RoundedCornerShape(12.dp)) {
         Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column { Text(opcion.nombreTienda, fontWeight = FontWeight.Bold, color = Color.Black); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Star, null, tint = GoldStar, modifier = Modifier.size(14.dp)); Text(" ${opcion.rating}", fontSize = 12.sp, color = Color.Gray) }; if(esMejorOpcion) Text("¡MEJOR OPCIÓN!", color = TechBackground, fontSize = 10.sp, fontWeight = FontWeight.Black) }
-            Text("$${opcion.precio}", fontWeight = FontWeight.ExtraBold, color = TechBackground, fontSize = 16.sp)
+            Text("$${String.format("%,.0f", opcion.precio)}", fontWeight = FontWeight.ExtraBold, color = TechBackground, fontSize = 16.sp)
         }
     }
 }
@@ -580,7 +341,7 @@ fun CategoriasFuncionales(seleccionada: CategoriaType, onSelect: (CategoriaType)
 @Composable
 fun CampoTextoBlanco(value: String, onValueChange: (String) -> Unit, placeholder: String, isPassword: Boolean = false, keyboardType: KeyboardType = KeyboardType.Text) {
     var passwordVisible by remember { mutableStateOf(false) }
-    TextField(value = value, onValueChange = onValueChange, placeholder = { Text(placeholder, color = Color.LightGray) }, visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None, keyboardOptions = KeyboardOptions(keyboardType = keyboardType), trailingIcon = { if (isPassword) { IconButton(onClick = { passwordVisible = !passwordVisible }) { Icon(imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = null, tint = Color.Gray) } } }, colors = TextFieldDefaults.colors(focusedContainerColor = White, unfocusedContainerColor = White, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, focusedTextColor = Color.Black, unfocusedTextColor = Color.Black), shape = RoundedCornerShape(50), modifier = Modifier.fillMaxWidth())
+    TextField(value = value, onValueChange = onValueChange, placeholder = { Text(placeholder, color = Color.LightGray) }, visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None, keyboardOptions = KeyboardOptions(keyboardType = keyboardType), trailingIcon = { if (isPassword) { IconButton(onClick = { passwordVisible = !passwordVisible }) { Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null, tint = Color.Gray) } } }, colors = TextFieldDefaults.colors(focusedContainerColor = White, unfocusedContainerColor = White, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, focusedTextColor = Color.Black, unfocusedTextColor = Color.Black), shape = RoundedCornerShape(50), modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -596,14 +357,9 @@ fun SectionRedesSociales(viewModel: MainViewModel, navController: NavController)
 fun SelectorProductoDinamico(producto: ProductoUi?) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(modifier = Modifier.size(100.dp).background(White, RoundedCornerShape(12.dp)).border(1.dp, NeonGreen, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-            if (producto != null) {
-                if (producto.imagenUrl != null) AsyncImage(model = producto.imagenUrl, contentDescription = null, modifier = Modifier.padding(5.dp), contentScale = ContentScale.Fit) else Icon(producto.iconoDefault, null, tint = Color.Black, modifier = Modifier.size(40.dp))
-            } else {
-                Icon(Icons.Default.Add, null, tint = Color.Gray, modifier = Modifier.size(40.dp))
-            }
+            if (producto != null) { if (producto.imagenUrl != null) AsyncImage(model = producto.imagenUrl, contentDescription = null, modifier = Modifier.padding(5.dp)) else Icon(producto.iconoDefault, null, tint = Color.Black, modifier = Modifier.size(40.dp)) } else { Icon(Icons.Default.Add, null, tint = Color.Gray, modifier = Modifier.size(40.dp)) }
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(producto?.nombre ?: "Seleccionar", color = White, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.width(90.dp), maxLines = 1)
+        Spacer(modifier = Modifier.height(4.dp)); Text(producto?.nombre ?: "Elegir", color = White, fontSize = 12.sp)
     }
 }
 
@@ -611,38 +367,109 @@ fun SelectorProductoDinamico(producto: ProductoUi?) {
 fun RowTabla(label: String, val1: String, val2: String) { Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(val1, fontWeight = FontWeight.Bold, color = TechBackground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center); Text(label, color = Color.Gray, fontSize = 12.sp, modifier = Modifier.weight(0.8f), textAlign = TextAlign.Center); Text(val2, fontWeight = FontWeight.Bold, color = TechBackground, modifier = Modifier.weight(1f), textAlign = TextAlign.Center) } }
 
 @Composable
-fun BottomNavigationBar(navController: NavController, pantallaActual: String) { NavigationBar(containerColor = TechBackground, contentColor = White) { NavigationBarItem(icon = { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") }, selected = pantallaActual == "home", onClick = { navController.navigate("home") }, colors = NavigationBarItemDefaults.colors(selectedIconColor = NeonGreen, unselectedIconColor = White, indicatorColor = Color.Transparent)); NavigationBarItem(icon = { Icon(Icons.Default.CompareArrows, null) }, label = { Text("Comparar") }, selected = pantallaActual == "comparar", onClick = { navController.navigate("comparar") }, colors = NavigationBarItemDefaults.colors(selectedIconColor = NeonGreen, unselectedIconColor = White, indicatorColor = Color.Transparent)); NavigationBarItem(icon = { Icon(Icons.Default.FavoriteBorder, null) }, label = { Text("Favoritos") }, selected = pantallaActual == "favoritos", onClick = { navController.navigate("favoritos") }, colors = NavigationBarItemDefaults.colors(selectedIconColor = NeonGreen, unselectedIconColor = White, indicatorColor = Color.Transparent)) } }
+fun BottomNavigationBar(navController: NavController, pantallaActual: String) {
 
-@Composable
-fun HeaderSeccion(usuario: String?, navController: NavController, viewModel: MainViewModel) { Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("DOWN WITH\nYOUR TECH", color = White, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, lineHeight = 22.sp); if (usuario == null) { Column(horizontalAlignment = Alignment.End) { Button(onClick = { navController.navigate("registro") }, colors = ButtonDefaults.buttonColors(containerColor = NeonGreen), modifier = Modifier.height(26.dp), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("REGÍSTRATE", color = Color.Black, fontSize = 10.sp) }; Spacer(modifier = Modifier.height(4.dp)); Button(onClick = { navController.navigate("login") }, colors = ButtonDefaults.buttonColors(containerColor = NeonGreen), modifier = Modifier.height(26.dp), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("INICIA SESIÓN", color = Color.Black, fontSize = 10.sp) } } } else { Column(horizontalAlignment = Alignment.End) { Text(usuario, color = NeonGreen); Text("Salir", color = Color.Gray, modifier = Modifier.clickable { viewModel.logout() }) } } } }
-
-// --- LOGIN & REGISTRO (SIN CAMBIOS MAYORES) ---
-@Composable
-fun PantallaLogin(navController: NavController, viewModel: MainViewModel, dbHelper: DatabaseHelper) {
-    var usuarioText by remember { mutableStateOf("") }
-    var passText by remember { mutableStateOf("") }
-    val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxSize().background(TechBackground).padding(30.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("DOWN WITH YOUR TECH", color = White, fontWeight = FontWeight.Bold, fontSize = 22.sp); Spacer(modifier = Modifier.height(20.dp))
-        Image(painter = painterResource(id = R.drawable.logosinfondo), contentDescription = "Logo", modifier = Modifier.size(200.dp))
-        Spacer(modifier = Modifier.height(30.dp)); CampoTextoBlanco(usuarioText, { usuarioText = it }, "USUARIO/CORREO"); Spacer(modifier = Modifier.height(15.dp)); CampoTextoBlanco(passText, { passText = it }, "CONTRASEÑA", isPassword = true); Spacer(modifier = Modifier.height(30.dp))
-        Button(onClick = { val nombreReal = dbHelper.validarLogin(usuarioText, passText); if(nombreReal != null) { viewModel.login(nombreReal); navController.popBackStack(); Toast.makeText(context, "Bienvenido $nombreReal", Toast.LENGTH_SHORT).show() } else { Toast.makeText(context, "Credenciales incorrectas", Toast.LENGTH_SHORT).show() } }, colors = ButtonDefaults.buttonColors(containerColor = NeonGreen), modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("INICIAR SESIÓN", color = Color.Black, fontWeight = FontWeight.Bold) }
-        SectionRedesSociales(viewModel, navController)
+    NavigationBar(containerColor = BottomNavBackground, contentColor = White) {
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.Home, null) },
+            label = { Text("Inicio") },
+            selected = pantallaActual == "home",
+            onClick = { navController.navigate("home") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = NeonGreen,
+                unselectedIconColor = White.copy(alpha = 0.6f),
+                indicatorColor = Color.Transparent,
+                selectedTextColor = White,
+                unselectedTextColor = White.copy(alpha = 0.6f)
+            )
+        )
+        // ... (resto de items igual)
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.CompareArrows, null) },
+            label = { Text("Comparar") },
+            selected = pantallaActual == "comparar",
+            onClick = { navController.navigate("comparar") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = NeonGreen,
+                unselectedIconColor = White.copy(alpha = 0.6f),
+                indicatorColor = Color.Transparent,
+                selectedTextColor = White,
+                unselectedTextColor = White.copy(alpha = 0.6f)
+            )
+        )
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.FavoriteBorder, null) },
+            label = { Text("Favoritos") },
+            selected = pantallaActual == "favoritos",
+            onClick = { navController.navigate("favoritos") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = NeonGreen,
+                unselectedIconColor = White.copy(alpha = 0.6f),
+                indicatorColor = Color.Transparent,
+                selectedTextColor = White,
+                unselectedTextColor = White.copy(alpha = 0.6f)
+            )
+        )
     }
 }
 
 @Composable
-fun PantallaRegistro(navController: NavController, viewModel: MainViewModel, dbHelper: DatabaseHelper) {
-    var usuario by remember { mutableStateOf("") }
-    var correo by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
-    var passConfirm by remember { mutableStateOf("") }
-    val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxSize().background(TechBackground).padding(30.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("REGÍSTRATE", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(modifier = Modifier.height(20.dp))
-        Image(painter = painterResource(id = R.drawable.logosinfondo), contentDescription = "Logo", modifier = Modifier.size(200.dp))
-        Spacer(modifier = Modifier.height(30.dp)); CampoTextoBlanco(usuario, { usuario = it }, "USUARIO"); Spacer(modifier = Modifier.height(15.dp)); CampoTextoBlanco(correo, { correo = it }, "CORREO", keyboardType = KeyboardType.Email); Spacer(modifier = Modifier.height(15.dp)); CampoTextoBlanco(pass, { pass = it }, "CONTRASEÑA", isPassword = true); Spacer(modifier = Modifier.height(15.dp)); CampoTextoBlanco(passConfirm, { passConfirm = it }, "CONFIRMAR CONTRASEÑA", isPassword = true); Spacer(modifier = Modifier.height(30.dp))
-        Button(onClick = { if (usuario.isEmpty() || correo.isEmpty() || pass.isEmpty()) { Toast.makeText(context, "Llena todo", Toast.LENGTH_SHORT).show() } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(correo).matches()) { Toast.makeText(context, "Correo inválido", Toast.LENGTH_SHORT).show() } else if (!esPasswordSegura(pass)) { Toast.makeText(context, "Contraseña insegura", Toast.LENGTH_LONG).show() } else if (pass != passConfirm) { Toast.makeText(context, "No coinciden", Toast.LENGTH_SHORT).show() } else { if (dbHelper.existeUsuarioOCorreo(usuario, correo)) { Toast.makeText(context, "Ya existe", Toast.LENGTH_LONG).show() } else { if (dbHelper.registrarUsuario(usuario, correo, pass)) { viewModel.login(usuario); navController.navigate("home") { popUpTo("home") { inclusive = true } }; Toast.makeText(context, "Registro Exitoso", Toast.LENGTH_SHORT).show() } } } }, colors = ButtonDefaults.buttonColors(containerColor = NeonGreen), modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("CREAR CUENTA", color = Color.Black, fontWeight = FontWeight.Bold) }
-        SectionRedesSociales(viewModel, navController)
+fun HeaderSeccion(usuario: String?, navController: NavController, viewModel: MainViewModel) {
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Column {
+                Text("DOWN WITH", color = White, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, lineHeight = 22.sp)
+                Text("YOUR TECH", color = NeonGreen, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, lineHeight = 22.sp)
+            }
+
+
+            if (usuario == null) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Button(
+                        onClick = { navController.navigate("registro") },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
+                        modifier = Modifier.height(26.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text("REGÍSTRATE", color = Color.Black, fontSize = 10.sp)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = { navController.navigate("login") },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonGreen),
+                        modifier = Modifier.height(26.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text("INICIA SESIÓN", color = Color.Black, fontSize = 10.sp)
+                    }
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(usuario, color = NeonGreen)
+                    Text(
+                        "Salir",
+                        color = Color.Gray,
+                        modifier = Modifier.clickable { viewModel.logout() }
+                    )
+                }
+            }
+        }
+
+
+        Divider(
+            color = White,
+            thickness = 2.dp,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
     }
 }
