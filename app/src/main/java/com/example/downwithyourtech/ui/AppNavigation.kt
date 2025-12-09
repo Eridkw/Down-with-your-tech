@@ -61,7 +61,7 @@ import com.example.downwithyourtech.data.WebScraper
 // 1. CONSTANTES Y MODELOS
 // ==========================================
 val TechBackground = Color(0xFF000040)
-val NeonGreen = Color(0xFFCCFF00)
+val NeonGreen = Color(0xFF4CFF00)
 val White = Color.White
 val GrayPlaceholder = Color(0xFFF5F5F5)
 val GoldStar = Color(0xFFFFD700)
